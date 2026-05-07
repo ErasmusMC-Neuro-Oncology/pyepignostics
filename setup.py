@@ -20,7 +20,7 @@ setup(
     description="pymnp: python api for the MolecularNeuropathology web portal",
     version=VERSION.get("__version__", "0.0.0"),
     scripts=['bin/api_example_download_all.py'],
-    packages=find_packages(where=".", exclude=["tests"]),
+    packages=find_packages(where=".", exclude=["tests", "cache", "cache*"]),
     install_requires=["tqdm", "requests", "flask"],
     classifiers=[
         "Development Status :: 1 - Planning",

@@ -7,5 +7,5 @@ then
 fi
 
 source .venv/bin/activate
-pip install .
+pip install -e . # -e excludes ./cache
 
