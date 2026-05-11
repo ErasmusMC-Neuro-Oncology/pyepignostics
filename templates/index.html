@@ -1,88 +1,264 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h1>{% block title %} {{ nsamples }} Samples {% endblock %}</h1>
+    <div class="header-section">
+        <div>
+            <h1>{{ nsamples }} Samples</h1>
+            <div class="view-toggle" id="viewToggle">
+                <button class="toggle-btn active" data-view="progress">Progress</button>
+                <button class="toggle-btn" data-view="result">Result</button>
+            </div>
+        </div>
+        <button class="btn-new-sample">New sample</button>
+    </div>
     
     <script language="javascript">
+        let currentView = 'progress';
+
+        function initToggle() {
+            const toggleBtns = document.querySelectorAll('.toggle-btn');
+            toggleBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    toggleBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentView = this.dataset.view;
+                    updateViewDisplay();
+                });
+            });
+        }
+
+        function updateViewDisplay() {
+            // Show/hide progress vs result view
+            document.querySelectorAll('.workflow-cell').forEach(cell => {
+                const resultDataDiv = cell.querySelector('.result-data');
+                const progressContent = cell.querySelector('.progress-content');
+                let resultContent = cell.querySelector('.result-content');
+
+                if (!resultContent && resultDataDiv) {
+                    resultContent = document.createElement('span');
+                    resultContent.className = 'result-content';
+                    try {
+                        const resultText = resultDataDiv.textContent.trim();
+                        const result = JSON.parse(resultText);
+                        if (result.group && result.score !== undefined) {
+                            const formattedScore = (typeof result.score === 'number' ? result.score.toFixed(2) : result.score);
+                            let displayGroup = result.group;
+                            let titleAttr = '';
+                            if (result.group.length > 24) {
+                                displayGroup = result.group.substring(0, 24) + '...';
+                                titleAttr = ` title="${result.group}"`;
+                            }
+                            resultContent.innerHTML = `<span style="font-size: 12px; font-weight: 500;"${titleAttr}>${displayGroup} <span style="color: #667eea; font-weight: 600;">${formattedScore}</span></span>`;
+                        } else {
+                            resultContent.innerHTML = '<span style="color: #9ca3af; font-size: 12px;">-</span>';
+                        }
+                    } catch (e) {
+                        console.error('Error parsing result:', e);
+                        resultContent.innerHTML = '<span style="color: #9ca3af; font-size: 12px;">-</span>';
+                    }
+                    cell.appendChild(resultContent);
+                }
+
+                if (currentView === 'result') {
+                    if (progressContent) progressContent.style.display = 'none';
+                    if (resultContent) resultContent.style.display = 'inline';
+                } else {
+                    if (progressContent) progressContent.style.display = 'inline';
+                    if (resultContent) resultContent.style.display = 'none';
+                }
+            });
+        }
+
+        function sortTable() {
+            const table = document.querySelector('TABLE');
+            const allRows = Array.from(table.querySelectorAll('TR'));
+            const headerRow = allRows[0];
+            const numCols = headerRow.cells.length;
+
+            // Get workflow columns info
+            const workflowInfo = [];
+            for (let i = 5; i < numCols - 1; i++) {
+                const headerText = headerRow.cells[i].textContent.trim();
+                workflowInfo.push({
+                    index: i,
+                    classifier: headerText.split('\n')[0].trim(),
+                    version: parseFloat(headerText.match(/v([\d.]+)/)?.[1] || '0')
+                });
+            }
+
+            // Sort by classifier name, then by version
+            workflowInfo.sort((a, b) => {
+                const nameCompare = a.classifier.localeCompare(b.classifier);
+                if (nameCompare !== 0) return nameCompare;
+                return a.version - b.version;
+            });
+
+            // Reorder cells in each row
+            allRows.forEach(row => {
+                // Store original cells
+                const allCells = Array.from(row.cells);
+
+                // Clear row
+                row.innerHTML = '';
+
+                // Add fixed columns
+                for (let i = 0; i < 5; i++) {
+                    row.appendChild(allCells[i]);
+                }
+
+                // Add workflow columns in sorted order
+                workflowInfo.forEach(info => {
+                    row.appendChild(allCells[info.index]);
+                });
+
+                // Add last column
+                row.appendChild(allCells[numCols - 1]);
+            });
+        }
+
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                initToggle();
+                sortTable();
+            });
+        } else {
+            initToggle();
+            sortTable();
+        }
+
         function prompt_remove_sample(selector, sample_id, sample_idat) {
             conf = prompt("Confirm removal of: " + sample_idat + " by typing: yes", "");
-            
+
             if(conf == "yes") {
                 $(selector).text('');
                 $.get('/sample/'+sample_id+':'+sample_idat+'/remove_sample');
             }
-            
-            
+        }
+
+        function cache_workflow_result(selector, sample_id, sample_idat, run_id) {
+            $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
+            $.get('/sample/'+sample_id+':'+sample_idat+'/workflow_run/'+run_id+'/cache', function() {
+                location.reload();
+            }).fail(function() {
+                $(selector).html('<i class="fas fa-save"></i>');
+                alert('Failed to cache workflow result');
+            });
+        }
+
+        function download_workflow_result(sample_id, sample_idat, run_id) {
+            window.location.href='/sample/'+sample_id+':'+sample_idat+'/workflow_run/'+run_id+'/download';
+        }
+
+        function execute_workflow(selector, sample_id, sample_idat, workflow_id) {
+            $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
+            $.get('/sample/'+sample_id+':'+sample_idat+'/workflow/'+workflow_id+'/execute_job', function() {
+                setTimeout(function() {
+                    location.reload();
+                }, 2000);
+            }).fail(function() {
+                $(selector).html('<i class="fas fa-play"></i>');
+                alert('Failed to execute workflow');
+            });
+        }
+
+        function restart_workflow_run(selector, sample_id, sample_idat, run_id) {
+            $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
+            $.get('/sample/'+sample_id+':'+sample_idat+'/workflow_run/'+run_id+'/restart', function() {
+                setTimeout(function() {
+                    location.reload();
+                }, 2000);
+            }).fail(function() {
+                $(selector).html('<i class="fas fa-redo"></i>');
+                alert('Failed to restart workflow');
+            });
+        }
+
+        function refresh_sample(selector, sample_id, sample_idat) {
+            $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
+            $.get('/sample/'+sample_id+':'+sample_idat+'/refresh', function() {
+                setTimeout(function() {
+                    location.reload();
+                }, 1000);
+            }).fail(function() {
+                $(selector).html('<i class="fas fa-sync-alt"></i>');
+                alert('Failed to refresh sample');
+            });
         }
     </script>
     
     <TABLE>
         <TR>
-            <TD><B>name</B></TD>
-            <TD> &nbsp; </TD>
-            <TD><B>sentrix_id</B></TD>
-            
-            <TD> &nbsp; </TD>
-            <TD><B>chip</B></TD>
-            <TD> &nbsp; </TD>
-            <TD><B>type</B></TD>
-            
-            <TD> &nbsp;&nbsp; </TD>
-            <TD><B>&nbsp;</B></TD>
-            <TD> &nbsp;&nbsp;&nbsp;&nbsp; </TD>
-            <TD><B>&nbsp;</B></TD>
-            <TD> &nbsp;&nbsp;&nbsp;&nbsp; </TD>
+            <TD><B>Sample</B></TD>
+            <TD><B>UUID</B></TD>
+            <TD><B>Chip</B></TD>
+            <TD style="width: 20px;"></TD>
+            <TD style="width: 20px;"></TD>
             {% for wf in wfs %}
-                <TD><span class="badge badge-primary" title="{{ wf._workflow_name_full }}"><NOBR>{{ wf._workflow_name_short }} v{{ wf._workflow_version }}</NOBR></span></TD>
+                <TD class="workflow-header" title="{{ wf._workflow_name_full }}" onclick="sortTable(this.cellIndex)" style="cursor: pointer;">
+                    {% if 'Classifier' in wf._workflow_name_short %}
+                        <B>{{ wf._workflow_name_short.replace('Heidelberg Epignostix ', '').split('Classifier')[0] }}Classifier</B><BR>v{{ wf._workflow_version }}
+                    {% else %}
+                        <B>{{ wf._workflow_name_short.replace('Heidelberg Epignostix ', '') }}</B> v{{ wf._workflow_version }}
+                    {% endif %}
+                </TD>
             {% endfor %}
+            <TD style="width: 100%;"></TD>
         </TR>
         
-    {% for post in posts %}
-        <TR style="border: 1px dashed gray;" VALIGN="top">
-            
-            <TD><span title="{{ post._created_at }}"><NOBR><I>{{ post._name }}</NOBR></I></span></TD>
-            <TD> &nbsp; </TD>
-            <TD><span title="{{ post._created_at }}"><NOBR>{{ post._idat }}</NOBR></span></TD>
+    {% for sample in samples %}
+        <TR VALIGN="top">
+            <TD><span title="ID: {{ sample._id }} | Name: {{ sample._name }} | Created: {{ sample._created_at }}"><NOBR><I>{{ sample._name }}</NOBR></I></span></TD>
+            <TD><span title="Full UUID: {{ sample._idat }} | Sample ID: {{ sample._id }}" style="cursor: copy; user-select: text;"><NOBR>{{ sample._idat[:8] }}...</NOBR></span></TD>
+            <TD><span title="{{ sample._chip_type }}"><NOBR>{{ sample._chip_type.replace('CHIP_', '') }}</NOBR></span></TD>
+            <TD><span class="action-badge danger" title="remove sample" ID="sample_rm_{{ sample._id }}" style="cursor: pointer;" ONCLICK="prompt_remove_sample($('#sample_rm_{{ sample._id }}'), '{{ sample._id }}', '{{ sample._idat }}');"><i class="fas fa-trash"></i></span></TD>
+            <TD><span class="action-badge"><A style="cursor: pointer; color: inherit; text-decoration: none;" TITLE="refresh data in back-end" ID="refresh_{{ sample._id}}" ONCLICK="refresh_sample($('#refresh_{{ sample._id}}'), '{{ sample._id }}', '{{ sample._idat }}');"><i class="fas fa-sync-alt"></i></A></span></TD>
 
-            <TD> &nbsp; </TD>
-            <TD><span title="{{ post._created_at }}"><NOBR>{{ post._chip_type }}</NOBR></span></TD>
-            <TD> &nbsp; </TD>
-            <TD><span title="{{ post._created_at }}"><NOBR>{{ post._extraction_type }}</NOBR></span></TD>
-
-
-            <TD> &nbsp;&nbsp;&nbsp;&nbsp; </TD>
-
-            
-            <TD><span class="badge badge-primary" style="background-color: red;" title="remove sample"><A ID="sample_rm_{{ post._id }}" style="cursor: pointer;" ONCLICK="prompt_remove_sample($('#sample_rm_{{ post._id }}'), '{{ post._id }}', '{{ post._idat }}');">X</A></span></TD>
-            <TD> &nbsp;&nbsp;&nbsp;&nbsp; </TD>
-            <TD><span class="badge badge-primary" style="background-color: darkgray;"><NOBR><A style="cursor: pointer;" TITLE="refresh data in back-end" ID="refresh_{{ post._id}}" ONCLICK="$('#refresh_{{ post._id}}').text('');$.get('/sample/{{ post._id }}:{{ post._idat }}/refresh');">[<B>&#8634;</B>]</A></NOBR></span></TD>
-            
-            <TD style="font-color:gray;"><nobr>&nbsp;&nbsp;|&nbsp;&nbsp;</nobr></TD>
-            
             {% for wf in wfs %}
-                {% if post._workflows[wf]['status'] == "available" %}
-                    <TD><span class="badge badge-primary" style="background-color: darkgray;"><NOBR><A style="cursor: pointer;" TITLE="run: {{ wf._workflow_name_full }} {{ wf._workflow_version }}" ID="exe_{{ post._id}}_{{ wf._workflow_id }}" ONCLICK="$('#exe_{{ post._id}}_{{ wf._workflow_id }}').text('');$.get('/sample/{{ post._id }}:{{ post._idat }}/workflow/{{ wf._workflow_id }}/execute_job');">[<B>&#8594;</B>]</A></NOBR></span></TD>
-                {% elif post._workflows[wf]['status'] == "unavailable" %}
-                    <TD><span class="badge badge-primary" style="background-color: red;" title="unavailable"><NOBR>--</NOBR></span></TD>
-                {% elif post._workflows[wf]['status'] == "done" %}
-                    <TD><!-- <span class="badge badge-primary" style="background-color: darkgray;"><A HREF="" TITLE="redo">[&#8594;]</A></span> -->{% for job in post._workflows[wf]['jobs'].values() %}
-                        <NOBR>
-                        <span title="Job: {{ job._id }}">
-                        <span class="badge badge-primary" style="background-color: blue;{%if job.is_downloaded() %}color: white;{% else %}color: blue; opacity: 0.25;{% endif %}" title="job {%if job.is_downloaded() == False %}not {% endif %}downloaded"><B>&#x2713;</B></span>
-                        {% for task in job._status %}<span class="badge badge-primary" style="background-color: {% if task['STATUS'] == 'complete' %}darkgreen{% elif task['STATUS'] == 'started' %}yellow{% elif task['STATUS'] == 'error' %}red{% else %}orange{% endif %};width:2px;font-size:10px;" TITLE="{{ task['TASK-NAME'] }}: {{ task['STATUS'] }} -- {{ task['CREATED-AT'] }}">&nbsp;</span>{% endfor %}
-                        
-                        
-                        <span class="badge badge-primary" style="background-color: orange;" title="restart job"><A ID="restart_job_{{ job._id }}" style="cursor: pointer;" ONCLICK="$('#restart_job_{{ job._id }}').text('');$('#remove_job_{{ job._id }}').text('');$.get('/sample/{{ post._id }}:{{ post._idat }}/job/{{ job._id }}/restart_job');"><B>&#8634;</B></A></span>
-                        
-                        <span class="badge badge-primary" style="background-color: red;" title="remove job"><A ID="remove_job_{{ job._id }}" style="cursor: pointer;" ONCLICK="$('#remove_job_{{ job._id }}').text('');$('#restart_job_{{ job._id }}').text('');$.get('/sample/{{ post._id }}:{{ post._idat }}/job/{{ job._id }}/remove_job');">X</A></span>
-                        </span>
-                        </NOBR>
-                    {% endfor %}</TD>
+                {% if sample._workflows[wf]['status'] == "available" %}
+                    <TD><span class="action-badge"><A style="cursor: pointer; color: inherit; text-decoration: none;" TITLE="Workflow ID: {{ wf._workflow_id }} | run: {{ wf._workflow_name_short.replace('Heidelberg Epignostix ', '') }} {{ wf._workflow_version }}" ID="exe_{{ sample._id}}_{{ wf._workflow_id }}" ONCLICK="execute_workflow($('#exe_{{ sample._id}}_{{ wf._workflow_id }}'), '{{ sample._id }}', '{{ sample._idat }}', '{{ wf._workflow_id }}');"><i class="fas fa-play"></i></A></span></TD>
+                {% elif sample._workflows[wf]['status'] == "unavailable" %}
+                    <TD><span class="action-badge danger" style="opacity: 0.5;" title="unavailable"><NOBR>--</NOBR></span></TD>
+                {% elif sample._workflows[wf]['status'] == "done" %}
+                    <TD class="workflow-cell">
+                        {% if sample._workflow_runs %}
+                            {% for run in sample._workflow_runs %}
+                                {% if run._workflow_id == wf._workflow_id %}
+                                    {% set classifier_result = run.get_classifier_result(workflow=wf, sample_name=sample._name) %}
+                                    <div style="display:none;" class="result-data">{{ classifier_result | tojson if classifier_result else '{}' }}</div>
+                                    <!-- Save button (always available) -->
+                                    <span class="action-badge" title="save to cache (s: {{ sample._id }}, wf: {{ wf._workflow_id }}, run: {{ run._id }})" onclick="cache_workflow_result($('#save_{{ sample._id}}_{{ run._id }}'), '{{ sample._id }}', '{{ sample._idat }}', '{{ run._id }}')" ID="save_{{ sample._id}}_{{ run._id }}"><i class="fas fa-save"></i></span>
+                                    <span class="progress-content"><NOBR>
+                                    <!--
+                                        <span class="badge badge-primary" style="background-color: {% if run._status == 'complete' %}darkgreen{% elif run._status == 'running' %}yellow{% elif run._status == 'failed' or run._status == 'error' %}red{% else %}orange{% endif %};" title="Workflow run status: {{ run._status }}">&nbsp;</span>
+                                        <span style="color: gray; margin: 0 2px;">:</span>
+                                    -->
+                                    <!-- Download button (active only if cached) -->
+                                    {% if run.is_cached(workflow=wf, sample_name=sample._name) %}
+                                        <span class="action-badge primary" title="download from cache as TAR (s: {{ sample._id }}, wf: {{ wf._workflow_id }}, run: {{ run._id }})" onclick="location.href='/sample/{{ sample._id }}:{{ sample._idat }}/workflow_run/{{ run._id }}/download'" ID="download_{{ sample._id}}_{{ run._id }}"><i class="fas fa-download"></i></span>
+                                    {% else %}
+                                        <span class="action-badge disabled" title="download (no cache yet)"><i class="fas fa-download"></i></span>
+                                    {% endif %}
+                                    {% if run._task_runs %}
+                                        <span class="status-group" title="Task run status">
+                                            {% for task in run._task_runs %}
+                                                <span class="status-dot {% if task['status'] == 'complete' %}green{% elif task['status'] == 'running' %}yellow{% elif task['status'] == 'failed' or task['status'] == 'error' %}red{% else %}gray{% endif %}" title="{{ task['task']['task_name'] }} v{{ task['task']['task_version'] }}: {{ task['status'] }}"></span>
+                                            {% endfor %}
+                                        </span>
+                                    {% endif %}
+                                    <span class="action-badge" title="restart workflow run (s: {{ sample._id }}, run: {{ run._id }})" onclick="restart_workflow_run($('#restart_{{ sample._id}}_{{ run._id }}'), '{{ sample._id }}', '{{ sample._idat }}', '{{ run._id }}')" ID="restart_{{ sample._id}}_{{ run._id }}"><i class="fas fa-redo"></i></span>
+                                    <span class="action-badge danger disabled" title="remove workflow run (not yet implemented)"><i class="fas fa-trash"></i></span>
+                                    </NOBR></span>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </TD>
                 {% else %}
-                    <TD><span class="badge badge-primary"><NOBR>{{ post._workflows[wf]['status'] }}</NOBR></span></TD>
+                    <TD><span class="badge badge-primary"><NOBR>st: {{ sample._workflows[wf]['status'] }}</NOBR></span></TD>
                 {% endif %}
-                
+
             {% endfor %}
+            <TD style="width: 100%;"></TD>
         </TR>
 
     {% endfor %}

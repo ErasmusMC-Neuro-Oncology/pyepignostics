@@ -7,3 +7,8 @@ __pycache__
 dist
 build
 cache
+.claude
+pymnp/new.py
+__pycache__
+*.png
+/scripts/legacy

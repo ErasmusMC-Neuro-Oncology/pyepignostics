@@ -7,53 +7,289 @@
 
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background-color: white;
+      }
+      .navbar {
+        background: #f9fafb;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .navbar-brand {
+        font-size: 20px;
+        font-weight: 700;
+        color: #667eea !important;
+        letter-spacing: -0.5px;
+      }
+      .navbar-nav {
+        margin-left: auto !important;
+      }
+      .nav-link {
+        color: #6b7280 !important;
+        font-size: 14px;
+        margin-left: 20px;
+      }
+      .btn-action {
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: none;
+        background-color: #667eea;
+        color: white;
+        font-weight: 500;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .btn-action:hover {
+        background-color: #5568d3;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102,126,234,0.3);
+      }
+      .container {
+        padding: 30px 15px;
+        max-width: 100%;
+        background: transparent;
+        margin: 0 auto;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .header-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+      }
+      .header-section + TABLE {
+        margin-left: auto;
+        margin-right: auto;
+      }
+      h1 {
+        font-size: 28px;
+        font-weight: 700;
+        color: #1f2937;
+        margin: 0 0 12px 0;
+      }
+      .view-toggle {
+        display: inline-flex;
+        gap: 0;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        overflow: hidden;
+        width: fit-content;
+      }
+      .toggle-btn {
+        padding: 8px 16px;
+        border: none;
+        background: white;
+        color: #6b7280;
+        font-weight: 500;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .toggle-btn:not(:last-child) {
+        border-right: 1px solid #d1d5db;
+      }
+      .toggle-btn:hover {
+        background: #f9fafb;
+        color: #374151;
+      }
+      .toggle-btn.active {
+        background: #667eea;
+        color: white;
+      }
+      .toggle-btn.active:hover {
+        background: #5568d3;
+      }
+      .btn-new-sample {
+        padding: 10px 20px;
+        border-radius: 6px;
+        border: none;
+        background-color: #667eea;
+        color: white;
+        font-weight: 500;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .btn-new-sample:hover {
+        background-color: #5568d3;
+        box-shadow: 0 4px 12px rgba(102,126,234,0.3);
+      }
+      TABLE {
+        width: 100%;
+        margin: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 13px;
+        border: 0.5px solid rgba(0, 0, 0, 0.1);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      TABLE TR {
+        background: white;
+      }
+      TABLE TR:nth-child(even) {
+        background: #fafafa;
+      }
+      TABLE TR:hover {
+        background: #f3f4f6;
+      }
+      TABLE TD {
+        padding: 12px 8px;
+        border-right: 0.5px solid rgba(0, 0, 0, 0.05);
+        border-bottom: 0.5px solid rgba(0, 0, 0, 0.12);
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+      TABLE TD:last-child {
+        width: 100%;
+        white-space: normal;
+        border-right: none;
+      }
+      TABLE TR:first-child {
+        background: linear-gradient(180deg, #bfdbfe 0%, #f0f9ff 100%);
+        border-bottom: 2px solid #d1d5db;
+      }
+      TABLE TR:first-child TD {
+        padding: 12px 8px;
+        font-weight: 600;
+        color: #1e40af;
+        font-size: 12px;
+        letter-spacing: 0.5px;
+        background: inherit;
+      }
+      TABLE TR:not(:first-child) TD:first-child {
+        font-weight: 600;
+      }
+      .workflow-header {
+        background: linear-gradient(180deg, #bfdbfe 0%, #f0f9ff 100%) !important;
+        color: #1e40af;
+        font-size: 12px;
+        font-weight: 500;
+        text-align: center;
+        padding: 12px 8px !important;
+      }
+      .status-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        margin: 0 1px;
+      }
+      .status-dot.green {
+        background-color: #10b981;
+      }
+      .status-dot.red {
+        background-color: #ef4444;
+      }
+      .status-dot.yellow {
+        background-color: #f59e0b;
+      }
+      .status-dot.gray {
+        background-color: #9ca3af;
+      }
+      .status-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+        padding: 4px 5px;
+        border-radius: 3px;
+        border: 1px solid #d1d5db;
+        background-color: white;
+        height: 28px;
+        line-height: 1;
+      }
+      .action-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 6px;
+        border-radius: 3px;
+        border: 1px solid #d1d5db;
+        background-color: white;
+        cursor: pointer;
+        font-size: 12px;
+        color: #374151;
+        transition: all 0.2s ease;
+        height: 28px;
+        line-height: 1;
+      }
+      .action-badge:hover {
+        border-color: #9ca3af;
+        background-color: #f9fafb;
+        color: #1f2937;
+      }
+      .action-badge.danger {
+        color: #dc2626;
+        border-color: #fca5a5;
+      }
+      .action-badge.danger:hover {
+        background-color: #fee2e2;
+      }
+      .action-badge.primary {
+        color: #1d4ed8;
+        border-color: #93c5fd;
+      }
+      .action-badge.primary:hover {
+        background-color: #eff6ff;
+      }
+      .action-badge.disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      @media (max-width: 1400px) {
+        TABLE {
+          font-size: 12px;
+        }
+        TABLE TD {
+          padding: 10px 6px;
+        }
+      }
+    </style>
 
     <title>{% block title %} {% endblock %}</title>
   </head>
   <body>
-    <nav class="navbar navbar-expand-md navbar-light bg-light">
-        <a class="navbar-brand" href="{{ url_for('index')}}">Molecular Neuropathology Scraper</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        
-        
+    <nav class="navbar navbar-expand-md">
+        <a class="navbar-brand" href="{{ url_for('index')}}">epignostics</a>
+
         <script>
             function scrape() {
                 $( "#scrape" ).html( "... updating ..." );
-                
+
                 $.get( "/scrape", function( data ) {
                   $( "#scrape" ).html( "updated" );
                     location.reload();
                 });
             };
-            
+
              function scrape_list() {
                 $( "#scrape-list" ).html( "... updating ..." );
-                
+
                 $.get( "scrape-list", function( data ) {
-  $( "#scrape-list" ).html( "updated" );
-    location.reload();
-});
+                  $( "#scrape-list" ).html( "updated" );
+                    location.reload();
+                });
             };
         </script>
-        <button onclick="scrape();" id="scrape">
-            update all data
-        </button>
-        <button onclick="scrape_list();" id="scrape-list">
-            update list only
-        </button>
-        
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav">
-            <li class="nav-item active">
-                <a class="nav-link" href="#">About</a>
-            </li>
-            </ul>
+
+        <div class="collapse navbar-collapse" id="navbarNav" style="margin-left: auto;">
+            <button onclick="scrape();" id="scrape" class="btn-action">
+                update all
+            </button>
+            <button onclick="scrape_list();" id="scrape-list" class="btn-action" style="margin-left: 8px;">
+                update list
+            </button>
         </div>
     </nav>
-    <div class="container" style="margin-left: 25px;">
+    <div class="container">
         {% block content %} {% endblock %}
     </div>
 
