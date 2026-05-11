@@ -446,7 +446,7 @@ Authorization: Bearer <access_token>
 | API Concept | Python Class | Location |
 |---|---|---|
 | Sample | `sample` | `pyepignostics/pyepignostics.py` |
-| Workflow | `classifierWorkflowObj` | `pyepignostics/pyepignostics.py` |
+| Workflow | `Workflow` | `pyepignostics/workflow.py` |
 | Workflow Run | `workflow_run` | `pyepignostics/pyepignostics.py` |
 | API Client | `EpignosticsPortalClient` | `pyepignostics/pyepignostics.py` |
 
