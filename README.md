@@ -30,6 +30,16 @@ cp config.txt.example config.txt  # Edit with your credentials
 
 Then open your browser to `http://localhost:5000/`
 
+## Screenshots
+
+**Sample overview with workflow status:**
+
+![Screenshot 1](static/screenshot_01.png)
+
+**Detailed sample information and results:**
+
+![Screenshot 2](static/screenshot_02.png)
+
 ## Installation
 
 **For development:**
@@ -67,14 +77,6 @@ Open `http://localhost:5000/` in your browser to:
 - **Restart workflows** - Rerun analyses (unique feature not in standard Epignostix interface)
 - **Monitor progress** - Track workflow execution status and completion
 - **Download results** - Fetch analysis outputs (JSON, plots, reports)
-
-**Sample overview with workflow status:**
-
-![Screenshot 1](static/screenshot_01.png)
-
-**Detailed sample information and results:**
-
-![Screenshot 2](static/screenshot_02.png)
 
 ### Python API
 
