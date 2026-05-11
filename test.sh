@@ -12,3 +12,6 @@ pytest -s tests/test_login.py
 
 # Or run a specific test:
 # pytest -s tests/test_login.py::TestLogin::test_login_succeeds
+
+
+pytest -s tests/test_workflows.py
