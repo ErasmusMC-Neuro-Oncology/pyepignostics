@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Tests for authentication via mnpscrapNew against the Epignostix portal.
+Tests for authentication via EpignosticsPortalClient against the Epignostix portal.
 
 Requires config.txt in the project root with:
     user=email@example.com
@@ -17,7 +17,7 @@ import requests
 import os
 import tempfile
 
-from pymnp.pymnp import mnpscrapNew
+from pyepignostics.epignostics import EpignosticsPortalClient
 
 CONFIG_PATH = pathlib.Path(__file__).parent.parent / "config.txt"
 
@@ -27,7 +27,7 @@ requires_config = pytest.mark.skipif(
 )
 
 
-class _mnpscrapNewWithCreds(mnpscrapNew):
+class _EpignosticsPortalClientWithCreds(EpignosticsPortalClient):
     """Test-only subclass that injects credentials instead of reading config.txt."""
     def __init__(self, username, password):
         self._user = username
@@ -50,7 +50,7 @@ class TestLogin:
     @requires_config
     def test_login_succeeds(self):
         """login() must return True and store a non-empty token."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         result = app.login()
         assert result is True
         assert app._response_token, "Expected a non-empty access_token after login"
@@ -58,27 +58,27 @@ class TestLogin:
     @requires_config
     def test_credentials_cleared_after_login(self):
         """Credentials must be wiped from memory once login completes."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
         assert app._user is None
         assert app._pwd is None
 
     def test_login_with_wrong_password(self):
         """Wrong password must raise SystemExit (non-200 response)."""
-        app = _mnpscrapNewWithCreds("user@example.com", "wrong-password-12345")
+        app = _EpignosticsPortalClientWithCreds("user@example.com", "wrong-password-12345")
         with pytest.raises((SystemExit, Exception)):
             app.login()
 
     def test_login_with_wrong_username(self):
         """Non-existent user must raise SystemExit (non-200 response)."""
-        app = _mnpscrapNewWithCreds("nonexistent_xyz_404@example.invalid", "irrelevant")
+        app = _EpignosticsPortalClientWithCreds("nonexistent_xyz_404@example.invalid", "irrelevant")
         with pytest.raises((SystemExit, Exception)):
             app.login()
 
     @requires_config
     def test_get_sample_count(self):
         """get_sample_count() must return a non-negative integer and print it."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
         n = app.get_sample_count()
         assert isinstance(n, int)
@@ -88,7 +88,7 @@ class TestLogin:
     @requires_config
     def test_update_samples_without_details(self):
         """update_samples(detailed=False) must fetch only basic sample info."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
 
         samples_fetched = []
@@ -107,7 +107,7 @@ class TestLogin:
     @requires_config
     def test_update_samples_with_details(self):
         """update_samples(detailed=True) must fetch samples with workflow runs."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
 
         samples_fetched = []
@@ -131,9 +131,9 @@ class TestLogin:
     @requires_config
     def test_get_workflows(self):
         """get_workflows() must fetch and populate classifierWorkflows from API."""
-        from pymnp.pymnp import classifierWorkflows
+        from pyepignostics.epignostics import classifierWorkflows
 
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
 
         # Clear workflows first to ensure we're testing the fetch
@@ -155,7 +155,7 @@ class TestLogin:
     @requires_config
     def test_workflow_run_details(self):
         """workflow_run.get_detailed_info() must fetch task runs for a workflow run."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
 
         # Fetch one sample with workflow runs
@@ -182,8 +182,8 @@ class TestLogin:
 
     @requires_config
     def test_token_can_reach_samples_endpoint(self, server_url):
-        """Token obtained via mnpscrapNew must allow an authenticated request."""
-        app = mnpscrapNew()
+        """Token obtained via EpignosticsPortalClient must allow an authenticated request."""
+        app = EpignosticsPortalClient()
         app.login()
 
         headers = {"Authorization": f"Bearer {app._response_token}"}
@@ -201,7 +201,7 @@ class TestLogin:
     @requires_config
     def test_download_report_from_completed_task(self):
         """Download report PDF from a sample with a completed workflow run task."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
 
         # Fetch samples with workflow runs
@@ -242,7 +242,7 @@ class TestLogin:
         filename = downloadable_run.get_file_name(download_info, sample_name=sample_with_downloadable._name)
 
         # Get workflow object for cache directory organization
-        from pymnp.pymnp import classifierWorkflows
+        from pyepignostics.epignostics import classifierWorkflows
         try:
             workflow = classifierWorkflows.get(downloadable_run._workflow_id)
         except:

@@ -2,7 +2,7 @@
 
 
 from tqdm import tqdm
-from pymnp.pymnp import *
+from pyepignostics.epignostics import *
 
 
 

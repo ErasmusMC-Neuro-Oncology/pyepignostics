@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyepignostics"
+dynamic = ["version"]
+description = "Python API for the Epignostix methylation analysis platform"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "Dr. Youri Hoogstrate", email = "y.hoogstrate@erasmusmc.nl"}
+]
+license = {text = "MIT"}
+keywords = ["epignostix", "methylation", "analysis", "CNS", "Sarcoma"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Intended Audience :: Science/Research",
+]
+dependencies = [
+    "tqdm>=4.0.0",
+    "requests>=2.28.0",
+    "flask>=2.0.0",
+    "watchdog>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yhoogstrate/pymnp"
+Repository = "https://github.com/yhoogstrate/pymnp.git"
+Documentation = "https://github.com/yhoogstrate/pymnp#readme"
+
+[tool.setuptools]
+packages = ["pyepignostics"]
+
+[tool.setuptools.dynamic]
+version = {attr = "pyepignostics.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "requires_config: tests that require config.txt",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

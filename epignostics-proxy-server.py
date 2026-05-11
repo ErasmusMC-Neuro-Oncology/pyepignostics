@@ -6,7 +6,7 @@ import tempfile
 import tarfile
 import io
 
-from pymnp.pymnp import *
+from pyepignostics.epignostics import *
 
 from flask import Flask, render_template, send_file
 from tqdm import tqdm
@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 webapp = Flask(__name__)
 
 
-app = mnpscrapNew()
+app = EpignosticsPortalClient()
 app.login()
 app.get_workflows()  # Load workflows from API
 n_samples = app.get_sample_count()

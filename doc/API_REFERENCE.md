@@ -445,8 +445,8 @@ Authorization: Bearer <access_token>
 
 | API Concept | Python Class | Location |
 |---|---|---|
-| Sample | `sample` | `pymnp/pymnp.py` |
-| Workflow | `classifierWorkflowObj` | `pymnp/pymnp.py` |
-| Workflow Run | `workflow_run` | `pymnp/pymnp.py` |
-| API Client | `mnpscrapNew` | `pymnp/pymnp.py` |
+| Sample | `sample` | `pyepignostics/pyepignostics.py` |
+| Workflow | `classifierWorkflowObj` | `pyepignostics/pyepignostics.py` |
+| Workflow Run | `workflow_run` | `pyepignostics/pyepignostics.py` |
+| API Client | `EpignosticsPortalClient` | `pyepignostics/pyepignostics.py` |
 

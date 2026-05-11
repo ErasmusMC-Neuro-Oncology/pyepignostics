@@ -15,8 +15,8 @@ import pathlib
 import pytest
 import logging
 
-from pymnp.pymnp import mnpscrapNew
-from pymnp.workflows import classifierWorkflowObj, classifierWorkflowsObj, classifierWorkflows
+from pyepignostics.epignostics import EpignosticsPortalClient
+from pyepignostics.workflows import classifierWorkflowObj, classifierWorkflowsObj, classifierWorkflows
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class TestWorkflows:
     @requires_config
     def test_workflows_can_be_loaded(self):
         """Load workflows from API and verify they populate classifierWorkflows."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
         app.get_workflows()
 
@@ -46,7 +46,7 @@ class TestWorkflows:
     @requires_config
     def test_classifier_workflow_obj_type(self):
         """Verify loaded workflows are classifierWorkflowObj instances."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
         app.get_workflows()
 
@@ -60,7 +60,7 @@ class TestWorkflows:
     @requires_config
     def test_classifier_workflows_obj_container(self):
         """Verify classifierWorkflows is a classifierWorkflowsObj instance."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
         app.get_workflows()
 
@@ -70,7 +70,7 @@ class TestWorkflows:
     @requires_config
     def test_workflows_greater_than_four(self):
         """Total number of workflows should be greater than 4."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
         app.get_workflows()
 
@@ -85,7 +85,7 @@ class TestWorkflows:
     @requires_config
     def test_workflow_retrieval_by_id(self):
         """Test that workflows can be retrieved by ID."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
         app.get_workflows()
 
@@ -102,7 +102,7 @@ class TestWorkflows:
     @requires_config
     def test_workflow_iteration(self):
         """Test that workflows can be iterated in sorted order by ID."""
-        app = mnpscrapNew()
+        app = EpignosticsPortalClient()
         app.login()
         app.get_workflows()
 

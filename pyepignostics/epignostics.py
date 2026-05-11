@@ -13,7 +13,7 @@ import zipfile
 import warnings
 from datetime import datetime
 
-from pymnp.workflows import classifierWorkflowObj, classifierWorkflowsObj, classifierWorkflows
+from pyepignostics.workflows import classifierWorkflowObj, classifierWorkflowsObj, classifierWorkflows
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class workflow_run:
         Fetch detailed task run information for this workflow run from the API.
 
         Args:
-            app: mnpscrapNew instance with authentication token
+            app: EpignosticsPortalClient instance with authentication token
         """
         try:
             response = requests.get(
@@ -289,7 +289,7 @@ class workflow_run:
         Restart a workflow run using the new Epignostix API.
 
         Args:
-            app: mnpscrapNew instance with authentication token
+            app: EpignosticsPortalClient instance with authentication token
 
         Returns:
             True on success, False on failure
@@ -314,7 +314,7 @@ class workflow_run:
         Download a result file from the API.
 
         Args:
-            app: mnpscrapNew instance with authentication token
+            app: EpignosticsPortalClient instance with authentication token
             download_info: specific download_info dict from get_download_info(), or None for first downloadable
             output_dir: directory to save file, or None to use cache directory with workflow info
             sample_name: sample identifier to include in filename, or None
@@ -387,7 +387,7 @@ class workflow_run:
         Directory structure: ./cache/{workflow_name}_v{version}_{id}/{sample_name}_{run_id}/{task_name}/
 
         Args:
-            app: mnpscrapNew instance with authentication token
+            app: EpignosticsPortalClient instance with authentication token
             sample_name: sample identifier for directory naming, or None
             workflow: workflow object to organize cache directory, or None
 
@@ -450,7 +450,7 @@ class workflow_run:
                     response = requests.get(
                         url,
                         headers={"Authorization": f"Bearer {app._response_token}"},
-                        verify=True,
+                verify=True,
                         timeout=30,
                     )
                     response.raise_for_status()
@@ -549,7 +549,7 @@ class sample:
         Note: created_at and updated_at are only available after calling get_detailed_info().
 
         Args:
-            app: mnpscrapNew instance with authentication token
+            app: EpignosticsPortalClient instance with authentication token
         """
         try:
             response = requests.get(
@@ -608,7 +608,7 @@ class sample:
         Execute a workflow for this sample using the new Epignostix API.
 
         Args:
-            app: mnpscrapNew instance with authentication token
+            app: EpignosticsPortalClient instance with authentication token
             workflow: classifierWorkflowObj instance
         """
         try:
@@ -637,7 +637,7 @@ class sample:
 # - credentials loaded (blocks everything except login)
 # - logged in (blocks loading credentials)
 # - error
-class mnpscrapNew:
+class EpignosticsPortalClient:
     _user = None
     _pwd = None
 
@@ -703,14 +703,41 @@ class mnpscrapNew:
 
         return True
 
+    def _request(self, method: str, url: str, **kwargs) -> requests.Response:
+        """Make HTTP request with automatic 401 re-login handling."""
+        if "headers" not in kwargs:
+            kwargs["headers"] = {}
+        if "Authorization" not in kwargs["headers"]:
+            kwargs["headers"]["Authorization"] = f"Bearer {self._response_token}"
+
+        response = requests.request(method, url, **kwargs)
+
+        # Handle token expiration
+        if response.status_code == 401:
+            log.warning("Token expired (401), re-logging in...")
+            self.login()
+            # Retry with new token
+            kwargs["headers"]["Authorization"] = f"Bearer {self._response_token}"
+            response = requests.request(method, url, **kwargs)
+
+        response.raise_for_status()
+        return response
+
+    def get(self, url: str, **kwargs) -> requests.Response:
+        """GET request with 401 handling."""
+        return self._request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs) -> requests.Response:
+        """POST request with 401 handling."""
+        return self._request("POST", url, **kwargs)
+
     def get_workflows(self):
         """Fetch available workflows from the API and populate classifierWorkflows."""
         logging.info("Getting available workflows")
 
         try:
-            response = requests.get(
+            response = self.get(
                 self._SERVER_URL + '/workflows',
-                headers={"Authorization": f"Bearer {self._response_token}"},
                 params={"entity_type": "IlluminaMethylationSample"},
                 verify=True,
             )
@@ -718,7 +745,7 @@ class mnpscrapNew:
             raw_workflows = response.json()
 
             # Clear and repopulate classifierWorkflows with data from the API
-            classifierWorkflows._map.clear()
+            classifierWorkflows._workflows.clear()
 
             for wf_data in raw_workflows:
                 wf = classifierWorkflowObj(
@@ -739,9 +766,8 @@ class mnpscrapNew:
     def get_sample_count(self):
         logging.info("Getting number of samples listed")
 
-        response = requests.get(
+        response = self.get(
             self._SERVER_URL + '/illumina_methylation_sample/count',
-            headers={"Authorization": f"Bearer {self._response_token}"},
             params={"search_term": ""},
             verify=True,
         )
@@ -774,9 +800,8 @@ class mnpscrapNew:
 
         logging.info("Getting sample overview -- n=" + str(n))
 
-        response = requests.get(
+        response = self.get(
             self._SERVER_URL + '/illumina_methylation_sample',
-            headers={"Authorization": f"Bearer {self._response_token}"},
             params={"skip": 0, "limit": n, "search_term": ""},
             verify=True,
         )
@@ -817,9 +842,8 @@ class mnpscrapNew:
 
         logging.info("Getting sample overview (sparse)")
 
-        response = requests.get(
+        response = self.get(
             self._SERVER_URL + '/illumina_methylation_sample',
-            headers={"Authorization": f"Bearer {self._response_token}"},
             params={"skip": 0, "limit": n, "search_term": ""},
             verify=True,
         )
@@ -858,41 +882,26 @@ class mnpscrapNew:
         return n
 
     def add_sample(self, sample_s):
-        """Add a sample to the local cache, keyed by idat UUID."""
-        idat_key = sample_s._idat
-        if idat_key in self._samples:
-            log.warning("Duplicate -- " + idat_key)
-        else:
-            self._samples[idat_key] = []
+        """Add a sample to the local cache, keyed by sample ID."""
+        sample_id = sample_s._id
+        if sample_id in self._samples:
+            log.warning(f"Duplicate sample ID: {sample_id}")
 
-        self._samples[idat_key].append(sample_s)
+        self._samples[sample_id] = sample_s
         self._n_samples += 1
 
-    def get_sample(self, sample_id, sample_idat):
-        """Retrieve a specific sample by ID and IDAT UUID."""
-        if sample_idat in self._samples:
-            samples = self._samples[sample_idat]
-
-            for s in samples:
-                if str(s._id) == str(sample_id):
-                    return s
-
-        return None
+    def get_sample(self, sample_id, sample_idat=None):
+        """Retrieve a specific sample by ID (idat parameter kept for backwards compatibility)."""
+        return self._samples.get(sample_id)
 
     def get_samples(self):
-        """Return all samples as a list."""
-        out = []
-
-        for sample in self:
-            out.append(sample)
-
-        return out
+        """Return all samples as a sorted list."""
+        return list(self)
 
     def __iter__(self):
-        """Iterate through all samples."""
-        for idat in self._samples:
-            for s in self._samples[idat]:
-                yield s
+        """Iterate through all samples in reverse sorted order by ID."""
+        for sample_id in sorted(self._samples.keys(), reverse=True):
+            yield self._samples[sample_id]
 
     def __len__(self):
         """Return the total number of samples."""
@@ -903,5 +912,6 @@ def is_valid_zipfile(zipfile):
     result = subprocess.run(['unzip', '-t', zipfile], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         
     return (result.returncode == 0)
+
 
 
