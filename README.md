@@ -101,16 +101,51 @@ for workflow in workflows:
 sample_id = samples[0]._id
 workflow_id = workflows[0].id
 app.execute_workflow(sample_id, workflow_id)
+
+# Upload a new sample
+result = app.upload_sample(
+    "path/to/sample_Grn.idat",
+    "path/to/sample_Red.idat",
+    sample_identifier="MY_SAMPLE_ID",
+    workflow_id=15
+)
+print(f"Uploaded: sample_id={result['sample_id']}, workflow_run_id={result['workflow_run_id']}")
 ```
+
+### Sample Uploader
+
+Upload new IDAT sample pairs and start analysis workflows:
+
+```bash
+source .venv/bin/activate
+python3 bin/upload-sample.py path/to/sample_Grn.idat path/to/sample_Red.idat
+python3 bin/upload-sample.py path/to/sample_Grn.idat path/to/sample_Red.idat MY_SAMPLE_ID
+python3 bin/upload-sample.py -v path/to/sample_Grn.idat path/to/sample_Red.idat    # verbose (show HTTP response)
+```
+
+**Example output:**
+```
+INFO:__main__:Uploading SAMPLE_NAME (workflow_id=15)
+sample_id:       {sample_id}
+uuid:            xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+workflow_run_id: {workflow_run_id}
+```
+
+The `sample_identifier` defaults to the filename with `_Grn.idat` / `_Red.idat` stripped. Metadata fields (localisation, diagnosis, age) are optional and default to empty.
 
 ### Batch Downloader
 
 Download and organize completed analysis results to `./cache/`:
 
 ```bash
-./scripts/download-results.sh              # Download all samples
-./scripts/download-results.sh TCGA-S9      # Download only samples matching "TCGA-S9"
+source .venv/bin/activate
+python3 bin/download-results.py              # Download all samples
+python3 bin/download-results.py TCGA-S9      # Download only samples matching "TCGA-S9"
+python3 bin/download-results.py -f           # Force re-download all (skip cache)
+python3 bin/download-results.py -f TCGA-S9   # Force re-download matching samples
 ```
+
+By default, already-cached results are skipped. Use the `-f` or `--force` flag to bypass the cache and re-download all files.
 
 **First run** - Download all completed results:
 ```

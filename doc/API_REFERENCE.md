@@ -95,7 +95,7 @@ List samples with pagination and optional filtering.
     "id": "{sample_id}",
     "created_at": "2026-05-07T09:25:17.624165",
     "updated_at": "2026-05-07T09:25:17.624167",
-    "sample_identifier": "TCGA-S9-A6WI-01A",
+    "sample_identifier": "SAMPLE_NAME",
     "localisation": null,
     "diagnosis": null,
     "age": null,
@@ -105,7 +105,7 @@ List samples with pagination and optional filtering.
     "subject_id": "{subject_id}",
     "filename": "",
     "idat": {
-      "uuid": "ebb4c2e0-c32b-517c-9933-6f9c3150e98b", # hash of sentrix id, algorithm or peper/salting still unknown
+      "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", # hash of sentrix id, algorithm or pepper/salting unknown
       "chip_type": "CHIP_450K_V1"
     }
   }
@@ -140,6 +140,61 @@ Returns the total number of samples (plain text integer). Cheap operation — us
 ```
 Sample count: [0-9]+
 ```
+
+### PUT /api/v1/illumina_methylation_sample
+
+Upload new methylation IDAT sample files and initiate analysis workflow.
+
+**Request:**
+```
+PUT https://app.epignostix.com/api/v1/illumina_methylation_sample
+Authorization: Bearer <access_token>
+Content-Type: multipart/form-data
+```
+
+**Query parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sample_identifier` | string | yes | User-visible sample name (e.g., "GSM2794576_9374342122_R05C02") |
+| `given_chip_type` | string | yes | Chip type ("ND" if unknown) |
+| `given_extraction_type` | string | yes | Extraction type ("ND" if unknown) |
+| `sex` | string | yes | Sex determination ("ND" if unknown) |
+| `workflow_id` | integer | yes | Workflow ID to execute after upload |
+| `keep_filename` | boolean | yes | Whether to preserve original IDAT filenames |
+
+**Form data (multipart/form-data):**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `idat1` | file | yes | First IDAT file (binary, typically `*_Grn.idat`) |
+| `idat2` | file | yes | Second IDAT file (binary, typically `*_Red.idat`) |
+| `localisation` | string | no | Anatomical localisation |
+| `diagnosis` | string | no | Clinical diagnosis |
+| `age` | string | no | Patient age |
+
+⚠️ **Important:** `workflow_id` is required and must be a valid integer. Omitting it or passing "ND" or other non-integer values will result in a 422 error.
+
+**Response (200):**
+```json
+{
+  "sample_id": {sample_id},
+  "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "workflow_run_id": {workflow_run_id}
+}
+```
+
+**Response fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `sample_id` | integer | ID of the newly created sample |
+| `uuid` | string (UUID) | Unique identifier of uploaded IDAT file |
+| `workflow_run_id` | integer | ID of the initiated workflow run |
+
+**Response (422):**
+```
+422 Client Error: Unprocessable Entity
+```
+
+Occurs when `workflow_id` is not a valid integer (e.g., "ND" or other non-numeric values).
 
 ---
 
@@ -204,7 +259,7 @@ Returns full workflow run with nested `task_runs` array. Each task has its own s
   "creator_id": "{creator_id}",
   "task_runs": [
     {
-      "id": "{task_run_id}",782,
+      "id": "{task_run_id}",
       "created_at": "2026-05-06T07:04:15.967690",
       "updated_at": "2026-05-06T07:04:15.967693",
       "entity_id": "{entity_id}",
@@ -218,7 +273,7 @@ Returns full workflow run with nested `task_runs` array. Each task has its own s
       }
     },
     {
-      "id": "{task_run_id}",785,
+      "id": "{task_run_id}",
       "created_at": "2026-05-06T07:04:16.540576",
       "updated_at": "2026-05-06T07:04:16.540580",
       "entity_id": "{entity_id}",
@@ -232,7 +287,7 @@ Returns full workflow run with nested `task_runs` array. Each task has its own s
       }
     },
     {
-      "id": "{task_run_id}",780,
+      "id": "{task_run_id}",
       "created_at": "2026-05-06T07:04:15.581289",
       "updated_at": "2026-05-06T07:04:15.581292",
       "entity_id": "{entity_id}",
@@ -246,7 +301,7 @@ Returns full workflow run with nested `task_runs` array. Each task has its own s
       }
     },
     {
-      "id": "{task_run_id}",783,
+      "id": "{task_run_id}",
       "created_at": "2026-05-06T07:04:16.158617",
       "updated_at": "2026-05-06T07:04:16.158621",
       "entity_id": "{entity_id}",
@@ -260,7 +315,7 @@ Returns full workflow run with nested `task_runs` array. Each task has its own s
       }
     },
     {
-      "id": "{task_run_id}",786,
+      "id": "{task_run_id}",
       "created_at": "2026-05-06T07:04:16.746714",
       "updated_at": "2026-05-06T07:04:16.746717",
       "entity_id": "{entity_id}",
@@ -274,7 +329,7 @@ Returns full workflow run with nested `task_runs` array. Each task has its own s
       }
     },
     {
-      "id": "{task_run_id}",781,
+      "id": "{task_run_id}",
       "created_at": "2026-05-06T07:04:15.776639",
       "updated_at": "2026-05-06T07:04:15.776643",
       "entity_id": "{entity_id}",
@@ -288,7 +343,7 @@ Returns full workflow run with nested `task_runs` array. Each task has its own s
       }
     },
     {
-      "id": "{task_run_id}",784,
+      "id": "{task_run_id}",
       "created_at": "2026-05-06T07:04:16.349307",
       "updated_at": "2026-05-06T07:04:16.349310",
       "entity_id": "{entity_id}",

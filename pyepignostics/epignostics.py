@@ -903,6 +903,53 @@ class EpignosticsPortalClient:
         for sample_id in sorted(self._samples.keys(), reverse=True):
             yield self._samples[sample_id]
 
+    def upload_sample(
+        self,
+        idat_grn_path: str,
+        idat_red_path: str,
+        sample_identifier: str,
+        workflow_id: int,
+        given_chip_type: str = "ND",
+        given_extraction_type: str = "ND",
+        sex: str = "ND",
+        keep_filename: bool = False,
+        localisation: str = "",
+        diagnosis: str = "",
+        age: str = "",
+        verbose: bool = False,
+    ):
+        """
+        Upload a pair of IDAT files and start a workflow run.
+
+        Returns dict with sample_id, uuid, workflow_run_id on success, None on failure.
+        """
+        url = f"{self._SERVER_URL}/illumina_methylation_sample"
+        params = {
+            "sample_identifier": sample_identifier,
+            "given_chip_type": given_chip_type,
+            "given_extraction_type": given_extraction_type,
+            "sex": sex,
+            "workflow_id": workflow_id,
+            "keep_filename": str(keep_filename).lower(),
+        }
+        try:
+            with open(idat_grn_path, "rb") as grn, open(idat_red_path, "rb") as red:
+                files = {
+                    "idat1": (os.path.basename(idat_grn_path), grn, "application/octet-stream"),
+                    "idat2": (os.path.basename(idat_red_path), red, "application/octet-stream"),
+                }
+                data = {"localisation": localisation, "diagnosis": diagnosis, "age": age}
+                response = self._request("PUT", url, params=params, files=files, data=data, verify=True)
+            if verbose:
+                print(f"HTTP {response.status_code}")
+                print(response.text)
+            result = response.json()
+            log.info(f"Uploaded {sample_identifier}: sample_id={result['sample_id']}, workflow_run_id={result['workflow_run_id']}")
+            return result
+        except requests.exceptions.RequestException as e:
+            log.error(f"Failed to upload {sample_identifier}: {e}")
+            return None
+
     def __len__(self):
         """Return the total number of samples."""
         return self._n_samples
