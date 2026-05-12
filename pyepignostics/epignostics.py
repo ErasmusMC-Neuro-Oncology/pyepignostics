@@ -629,6 +629,20 @@ class sample:
             log.error(f"Could not execute workflow {workflow._workflow_id} for sample {self._id}: {str(e)}")
             return False
 
+    def remove(self, app):
+        """Delete sample from Epignostix server."""
+        try:
+            response = app._request(
+                "DELETE",
+                f"{app._SERVER_URL}/illumina_methylation_sample/{self._id}",
+                verify=True,
+            )
+            log.info(f"Deleted sample {self._id}")
+            return True
+        except requests.exceptions.RequestException as e:
+            log.error(f"Could not delete sample {self._id}: {str(e)}")
+            return False
+
 
 
 

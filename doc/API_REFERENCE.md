@@ -196,6 +196,23 @@ Content-Type: multipart/form-data
 
 Occurs when `workflow_id` is not a valid integer (e.g., "ND" or other non-numeric values).
 
+### DELETE /api/v1/illumina_methylation_sample/{sample_id}
+
+Delete a sample from Epignostix.
+
+**Request:**
+```
+DELETE https://app.epignostix.com/api/v1/illumina_methylation_sample/{sample_id}
+Authorization: Bearer <access_token>
+```
+
+**Response (404):**
+```
+404 Not Found
+```
+
+**Note:** The API returns 404 even on successful deletion. This is the expected behavior.
+
 ---
 
 ## 3. Workflows

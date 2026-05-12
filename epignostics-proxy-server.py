@@ -75,7 +75,7 @@ def scrape_list():
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow/<int:workflow_id>/execute_job")
 def execute_job(sample_id, sample_idat, workflow_id):
     """Execute a workflow for the given sample."""
-    sample = app.get_sample(str(sample_id), str(sample_idat))
+    sample = app.get_sample(sample_id)
 
     # If sample not found in cache, create a temporary sample object
     if sample is None:
@@ -108,11 +108,9 @@ def execute_job(sample_id, sample_idat, workflow_id):
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/restart")
 def restart_workflow_run(sample_id, sample_idat, run_id):
     """Restart a workflow run."""
-    try:
-        sample = app.get_sample(str(sample_id), str(sample_idat))
-        log.info(f"Found sample {sample_id}:{sample_idat}")
-    except Exception as e:
-        log.error(f"Could not find sample: {sample_id}:{sample_idat} - {str(e)}")
+    sample = app.get_sample(sample_id)
+    if sample is None:
+        log.error(f"Could not find sample in cache: {sample_id}:{sample_idat}")
         return "error - sample not found", 404
 
     # Find the workflow run
@@ -142,7 +140,7 @@ def restart_workflow_run(sample_id, sample_idat, run_id):
 def refresh(sample_id, sample_idat):
     """Refresh sample data by fetching latest workflow runs from API."""
     # Try to get sample from cache first
-    sample = app.get_sample(str(sample_id), str(sample_idat))
+    sample = app.get_sample(sample_id)
 
     # If not in cache, fetch it from API
     if not sample:
@@ -171,25 +169,21 @@ def refresh(sample_id, sample_idat):
 
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/remove_sample")
 def remove_sample(sample_id, sample_idat):
-    print(sample_id)
-    print(sample_idat)
-
-    sample = app.get_sample(str(sample_id), str(sample_idat))
-    print(sample)
+    sample = app.get_sample(sample_id)
+    if sample is None:
+        log.error(f"Could not find sample in cache: {sample_id}:{sample_idat}")
+        return "error - sample not found", 404
 
     sample.remove(app)
-
     return 'done removing and refreshing'
 
 
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/cache")
 def cache_workflow_result(sample_id, sample_idat, run_id):
     """Cache all workflow run outputs to ./cache directory on server."""
-    try:
-        sample = app.get_sample(str(sample_id), str(sample_idat))
-        log.info(f"Found sample {sample_id}:{sample_idat}")
-    except Exception as e:
-        log.error(f"Could not find sample: {sample_id}:{sample_idat} - {str(e)}")
+    sample = app.get_sample(sample_id)
+    if sample is None:
+        log.error(f"Could not find sample in cache: {sample_id}:{sample_idat}")
         return "error - sample not found", 404
 
     # Find the workflow run
@@ -229,11 +223,9 @@ def cache_workflow_result(sample_id, sample_idat, run_id):
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/download")
 def download_workflow_result(sample_id, sample_idat, run_id):
     """Download cached workflow run results as TAR archive."""
-    try:
-        sample = app.get_sample(str(sample_id), str(sample_idat))
-        log.info(f"Found sample {sample_id}:{sample_idat}")
-    except Exception as e:
-        log.error(f"Could not find sample: {sample_id}:{sample_idat} - {str(e)}")
+    sample = app.get_sample(sample_id)
+    if sample is None:
+        log.error(f"Could not find sample in cache: {sample_id}:{sample_idat}")
         return "error - sample not found", 404
 
     # Find the workflow run
