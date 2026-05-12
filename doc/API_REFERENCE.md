@@ -211,7 +211,10 @@ Authorization: Bearer <access_token>
 404 Not Found
 ```
 
-**Note:** The API returns 404 even on successful deletion. This is the expected behavior.
+**Notes:** 
+- The API returns 404 even on successful deletion. This is the expected behavior.
+- Deletion is **asynchronous**. When the request returns, the workflow runs and tasks are wiped immediately, but the sample itself is removed from the system after several minutes. During this window, the sample remains visible but has no workflow runs associated with it.
+- UI should either block/gray out the sample during deletion or avoid immediate page reloads, since the sample won't be fully removed for a few minutes.
 
 ---
 

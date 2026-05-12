@@ -116,23 +116,59 @@
             });
         }
 
+        function addRowNumbers() {
+            const table = document.querySelector('TABLE');
+            const rows = Array.from(table.querySelectorAll('TR'));
+            rows.forEach((row, index) => {
+                if (index > 0) { // Skip header row
+                    const lastCell = row.lastElementChild;
+                    lastCell.textContent = index;
+                    lastCell.style.textAlign = 'center';
+                    lastCell.style.color = '#9ca3af';
+                    lastCell.style.fontSize = '12px';
+                }
+            });
+        }
+
         // Wait for DOM to be ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function() {
                 initToggle();
                 sortTable();
+                addRowNumbers();
             });
         } else {
             initToggle();
             sortTable();
+            addRowNumbers();
         }
 
         function prompt_remove_sample(selector, sample_id, sample_idat) {
             conf = prompt("Confirm removal of: " + sample_idat + " by typing: yes", "");
 
             if(conf == "yes") {
-                $(selector).text('');
-                $.get('/sample/'+sample_id+':'+sample_idat+'/remove_sample');
+                $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
+                $.ajax({
+                    url: '/sample/'+sample_id+':'+sample_idat+'/remove_sample',
+                    type: 'GET',
+                    complete: function(xhr) {
+                        // 404 or 200 are both success (API returns 404 on successful delete)
+                        if (xhr.status === 404 || xhr.status === 200) {
+                            const row = document.querySelector(`#sample_rm_${sample_id}`).closest('TR');
+                            row.style.opacity = '0.5';
+                            row.style.pointerEvents = 'none';
+                            const sampleCell = row.querySelector('TD:first-child');
+                            if (sampleCell) {
+                                sampleCell.style.color = '#9ca3af';
+                            }
+                            $(selector).html('<i class="fas fa-trash"></i>');
+                        } else {
+                            // Only show alert for real errors (not 404)
+                            $(selector).html('<i class="fas fa-trash"></i>');
+                            alert('Failed to remove sample');
+                        }
+                    }
+                });
             }
         }
 
