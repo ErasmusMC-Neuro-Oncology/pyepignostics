@@ -266,9 +266,20 @@
             function scrape() {
                 $( "#scrape" ).html( "... updating ..." );
 
-                $.get( "/scrape", function( data ) {
-                  $( "#scrape" ).html( "updated" );
-                    location.reload();
+                $.get( "/scrape", function( response ) {
+                    if (response.status === 'success') {
+                        $( "#scrape" ).html( "Queued " + response.queued + " jobs" );
+                        // Poll queue immediately to show jobs
+                        if (typeof updateJobQueue === 'function') {
+                            updateJobQueue();
+                        }
+                        // Reload page after 1 second (user sees jobs first, then table updates)
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1000);
+                    } else {
+                        $( "#scrape" ).html( "error: " + response.message );
+                    }
                 });
             };
 

@@ -532,6 +532,7 @@ class sample:
         self._extraction_type = s_extraction_type
         self._workflows = {}
         self._workflow_runs = []
+        self._workflows_loading = set()
 
 
     def get_workflow_runs_new(self, app):
@@ -728,6 +729,7 @@ class EpignosticsPortalClient:
             response = requests.request(method, url, **kwargs)
 
         response.raise_for_status()
+        log.info(f"[API] {method} {url} → {response.status_code}")
         return response
 
     def get(self, url: str, **kwargs) -> requests.Response:

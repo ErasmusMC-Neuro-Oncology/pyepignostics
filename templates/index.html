@@ -226,13 +226,30 @@
         // Job Queue Polling with adaptive interval
         let queuePollInterval = null;
         let hasActiveJobs = false;
+        let processedJobs = new Set();
+        let lastActiveJobCount = 0;
+        let reloadScheduled = false;
 
         function updateJobQueue() {
             $.getJSON('/api/queue', function(data) {
                 const queueList = $('#jobQueueList');
                 const jobs = data.pending || [];
+                const completedJobs = data.completed || [];
                 const hadActiveJobs = hasActiveJobs;
+                const currentJobCount = jobs.length;
                 hasActiveJobs = jobs.length > 0;
+
+                // Reload only once when queue becomes empty after refresh jobs
+                if (lastActiveJobCount > 0 && currentJobCount === 0 && !reloadScheduled) {
+                    const hasRefreshJobs = completedJobs.some(job => job.type === 'refresh');
+                    if (hasRefreshJobs) {
+                        reloadScheduled = true;
+                        setTimeout(() => {
+                            location.reload();
+                        }, 500);
+                    }
+                }
+                lastActiveJobCount = currentJobCount;
 
                 if (jobs.length === 0) {
                     queueList.html('<div style="color: #9ca3af; font-size: 12px;">No jobs</div>');
@@ -333,7 +350,11 @@
 
             {% for wf in wfs %}
                 {% if sample._workflows[wf]['status'] == "available" %}
-                    <TD><span class="action-badge"><A style="cursor: pointer; color: inherit; text-decoration: none;" TITLE="Workflow ID: {{ wf._workflow_id }} | run: {{ wf._workflow_name_short.replace('Heidelberg Epignostix ', '') }} {{ wf._workflow_version }}" ID="exe_{{ sample._id}}_{{ wf._workflow_id }}" ONCLICK="execute_workflow($('#exe_{{ sample._id}}_{{ wf._workflow_id }}'), '{{ sample._id }}', '{{ sample._idat }}', '{{ wf._workflow_id }}');"><i class="fas fa-play"></i></A></span></TD>
+                    {% if wf._workflow_id in sample._workflows_loading %}
+                        <TD><span class="action-badge" title="Loading workflow data..." style="opacity: 0.6;"><i class="fas fa-hourglass-half"></i></span></TD>
+                    {% else %}
+                        <TD><span class="action-badge"><A style="cursor: pointer; color: inherit; text-decoration: none;" TITLE="Workflow ID: {{ wf._workflow_id }} | run: {{ wf._workflow_name_short.replace('Heidelberg Epignostix ', '') }} {{ wf._workflow_version }}" ID="exe_{{ sample._id}}_{{ wf._workflow_id }}" ONCLICK="execute_workflow($('#exe_{{ sample._id}}_{{ wf._workflow_id }}'), '{{ sample._id }}', '{{ sample._idat }}', '{{ wf._workflow_id }}');"><i class="fas fa-play"></i></A></span></TD>
+                    {% endif %}
                 {% elif sample._workflows[wf]['status'] == "unavailable" %}
                     <TD><span class="action-badge danger" style="opacity: 0.5;" title="unavailable"><NOBR>--</NOBR></span></TD>
                 {% elif sample._workflows[wf]['status'] == "done" %}

@@ -79,6 +79,8 @@ def process_queued_job(job):
             if sample_obj is None:
                 raise Exception(f"Sample {job['sample_id']} not found")
             sample_obj.get_workflow_runs_new(app)
+            # Mark workflows as no longer loading after refresh completes
+            sample_obj._workflows_loading.clear()
             log.info(f"Refreshed sample {job['sample_id']}")
 
         elif job['type'] == 'cache':
@@ -147,6 +149,104 @@ def get_queue():
     return jsonify(queue_data)
 
 
+@webapp.route('/api/samples')
+def get_samples_api():
+    """Get all samples as JSON for dynamic table updates."""
+    samples_data = []
+    for sample in app.get_samples():
+        sample_info = {
+            'id': sample._id,
+            'idat': sample._idat,
+            'name': sample._name,
+            'created_at': sample._created_at,
+            'chip_type': sample._chip_type,
+            'extraction_type': sample._extraction_type,
+            'workflow_runs': len(sample._workflow_runs) if sample._workflow_runs else 0,
+        }
+        samples_data.append(sample_info)
+
+    return jsonify({
+        'total': len(samples_data),
+        'samples': samples_data
+    })
+
+
+@webapp.route('/api/sample/<int:sample_id>')
+def get_sample_api(sample_id):
+    """Get in-memory sample data WITHOUT updating from Epignostix."""
+    sample = app.get_sample(sample_id)
+    if sample is None:
+        return jsonify({'error': 'sample not found'}), 404
+
+    # Build workflow status info from current in-memory state
+    workflows_data = {}
+    for wf in classifierWorkflows:
+        status = sample._workflows[wf]['status']
+        runs_for_wf = []
+        if sample._workflow_runs:
+            for run in sample._workflow_runs:
+                if run._workflow_id == wf._workflow_id:
+                    runs_for_wf.append({
+                        'id': run._id,
+                        'status': run._status,
+                        'cached': run.is_cached(workflow=wf, sample_name=sample._name),
+                        'classifier_result': run.get_classifier_result(workflow=wf, sample_name=sample._name)
+                    })
+        workflows_data[str(wf._workflow_id)] = {
+            'status': status,
+            'runs': runs_for_wf
+        }
+
+    return jsonify({
+        'id': sample._id,
+        'idat': sample._idat,
+        'name': sample._name,
+        'workflows': workflows_data
+    })
+
+
+@webapp.route('/api/sample/<int:sample_id>/update', methods=['POST'])
+def update_sample_api(sample_id):
+    """Update sample data from Epignostix API."""
+    sample = app.get_sample(sample_id)
+    if sample is None:
+        return jsonify({'error': 'sample not found'}), 404
+
+    try:
+        # Fetch current workflow runs from Epignostix
+        sample.get_workflow_runs_new(app)
+        sample._workflows_loading.clear()
+
+        # Build workflow status info
+        workflows_data = {}
+        for wf in classifierWorkflows:
+            status = sample._workflows[wf]['status']
+            runs_for_wf = []
+            if sample._workflow_runs:
+                for run in sample._workflow_runs:
+                    if run._workflow_id == wf._workflow_id:
+                        runs_for_wf.append({
+                            'id': run._id,
+                            'status': run._status,
+                            'cached': run.is_cached(workflow=wf, sample_name=sample._name),
+                            'classifier_result': run.get_classifier_result(workflow=wf, sample_name=sample._name)
+                        })
+            workflows_data[str(wf._workflow_id)] = {
+                'status': status,
+                'runs': runs_for_wf
+            }
+
+        return jsonify({
+            'id': sample._id,
+            'idat': sample._idat,
+            'name': sample._name,
+            'workflows': workflows_data
+        })
+    except Exception as e:
+        log.error(f"Failed to update sample {sample_id}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 def subsample(app, k):
     sslice = {}
     
@@ -165,13 +265,35 @@ def subsample(app, k):
 
 @webapp.route('/scrape')
 def scrape():
-    for _ in app.update_samples(detailed=True):
-        pass
+    try:
+        # Batch fetch all samples (fast - no workflow details)
+        for sample in app.update_samples(detailed=False):
+            # Populate workflows dict so template doesn't error
+            sample._populate_workflows_dict(set())
+            # Mark all workflows as loading since we just fetched with detailed=False
+            sample._workflows_loading = set(wf._workflow_id for wf in classifierWorkflows)
 
-    # save
-    # https://www.digitalocean.com/community/tutorials/python-pickle-example
+        # Queue refresh job for each sample
+        n_queued = 0
+        for sample in app.get_samples():
+            job = {
+                'id': str(uuid.uuid4()),
+                'type': 'refresh',
+                'sample_id': sample._id,
+                'sample_idat': sample._idat,
+                'status': 'queued',
+                'created_at': datetime.utcnow().isoformat() + 'Z',
+            }
+            with jobs_lock:
+                jobs_queue.append(job)
+            n_queued += 1
 
-    return render_template('scrape.html', posts=[]) # trigger that updating has completed
+        log.info(f"Queued {n_queued} refresh jobs for all samples")
+        return jsonify({'status': 'success', 'queued': n_queued, 'total_samples': app._n_samples})
+
+    except Exception as e:
+        log.error(f"Scrape failed: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @webapp.route('/scrape-list')
