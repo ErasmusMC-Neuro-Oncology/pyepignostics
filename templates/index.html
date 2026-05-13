@@ -2,16 +2,29 @@
 
 {% block content %}
     <div class="header-section">
-        <div>
-            <h1>{{ nsamples }} Samples</h1>
-            <div class="view-toggle" id="viewToggle">
-                <button class="toggle-btn active" data-view="progress">Progress</button>
-                <button class="toggle-btn" data-view="result">Result</button>
+        <h1 style="margin: 0; margin-bottom: 10px;">{{ nsamples }} Samples</h1>
+        <div style="display: flex; align-items: center; gap: 12px; width: 100%; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="view-toggle" id="viewToggle">
+                    <button class="toggle-btn active" data-view="progress">Progress</button>
+                    <button class="toggle-btn" data-view="result">Result</button>
+                </div>
+                <!-- Job Queue Display -->
+                <div id="jobQueueList" style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                    <div style="color: #9ca3af; font-size: 12px;">No jobs</div>
+                </div>
             </div>
+            <button class="btn-new-sample">New sample</button>
         </div>
-        <button class="btn-new-sample">New sample</button>
     </div>
-    
+
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+
     <script language="javascript">
         let currentView = 'progress';
 
@@ -174,11 +187,11 @@
 
         function cache_workflow_result(selector, sample_id, sample_idat, run_id) {
             $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
-            $.get('/sample/'+sample_id+':'+sample_idat+'/workflow_run/'+run_id+'/cache', function() {
-                location.reload();
+            $.post('/sample/'+sample_id+':'+sample_idat+'/workflow_run/'+run_id+'/cache', function(response) {
+                $(selector).html('<i class="fas fa-save"></i>');
+                updateJobQueue();  // Poll immediately to show job
             }).fail(function() {
                 $(selector).html('<i class="fas fa-save"></i>');
-                alert('Failed to cache workflow result');
             });
         }
 
@@ -210,15 +223,83 @@
             });
         }
 
+        // Job Queue Polling with adaptive interval
+        let queuePollInterval = null;
+        let hasActiveJobs = false;
+
+        function updateJobQueue() {
+            $.getJSON('/api/queue', function(data) {
+                const queueList = $('#jobQueueList');
+                const jobs = data.pending || [];
+                const hadActiveJobs = hasActiveJobs;
+                hasActiveJobs = jobs.length > 0;
+
+                if (jobs.length === 0) {
+                    queueList.html('<div style="color: #9ca3af; font-size: 12px;">No jobs</div>');
+                    // Switch to slow polling if we had active jobs
+                    if (hadActiveJobs) {
+                        clearInterval(queuePollInterval);
+                        queuePollInterval = setInterval(updateJobQueue, 10000);
+                    }
+                    return;
+                }
+
+                let html = '';
+                jobs.forEach((job, index) => {
+                    const jobType = job.type === 'refresh' ? 'Refresh' : 'Cache';
+                    const sampleId = job.sample_id;
+                    const sampleName = job.sample_idat ? job.sample_idat.substring(0, 8) : 'unknown';
+
+                    // Different colors for job types
+                    let baseColor = '#9ca3af';
+                    if (job.type === 'refresh') {
+                        baseColor = '#8b5cf6';  // purple for refresh
+                    } else if (job.type === 'cache') {
+                        baseColor = '#ec4899';  // pink for cache
+                    }
+
+                    const color = job.status === 'processing' ? baseColor : baseColor + '80';  // 50% opacity when queued
+                    const tooltip = `${jobType} · Sample ${sampleId}\n${sampleName}\n${job.status === 'processing' ? 'Processing' : 'Queued'}`;
+
+                    const animationStyle = job.status === 'processing' ? 'animation: pulse 1.5s ease-in-out infinite;' : '';
+                    html += `<div
+                        style="
+                            display: inline-block;
+                            width: 10px;
+                            height: 10px;
+                            border-radius: 50%;
+                            background-color: ${color};
+                            cursor: pointer;
+                            transition: all 0.2s ease;
+                            ${animationStyle}
+                        "
+                        title="${tooltip}"
+                        onmouseover="this.style.transform='scale(1.5)'; this.style.zIndex='10';"
+                        onmouseout="this.style.transform='scale(1)'; this.style.zIndex='auto';"
+                    ></div>`;
+                });
+
+                queueList.html(html);
+
+                // Switch to fast polling if we didn't have active jobs before
+                if (!hadActiveJobs && hasActiveJobs) {
+                    clearInterval(queuePollInterval);
+                    queuePollInterval = setInterval(updateJobQueue, 500);
+                }
+            });
+        }
+
+        // Start with slow polling (10 seconds)
+        queuePollInterval = setInterval(updateJobQueue, 10000);
+        updateJobQueue();  // Initial update
+
         function refresh_sample(selector, sample_id, sample_idat) {
             $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
-            $.get('/sample/'+sample_id+':'+sample_idat+'/refresh', function() {
-                setTimeout(function() {
-                    location.reload();
-                }, 1000);
+            $.post('/sample/'+sample_id+':'+sample_idat+'/refresh', function(response) {
+                $(selector).html('<i class="fas fa-sync-alt"></i>');
+                updateJobQueue();  // Poll immediately to show job
             }).fail(function() {
                 $(selector).html('<i class="fas fa-sync-alt"></i>');
-                alert('Failed to refresh sample');
             });
         }
     </script>

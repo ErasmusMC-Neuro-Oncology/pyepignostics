@@ -5,10 +5,14 @@ import os
 import tempfile
 import tarfile
 import io
+import uuid
+import threading
+import requests
+from datetime import datetime
 
 from pyepignostics.epignostics import *
 
-from flask import Flask, render_template, send_file
+from flask import Flask, render_template, send_file, jsonify
 from tqdm import tqdm
 #from run import *
 
@@ -18,11 +22,107 @@ log = logging.getLogger(__name__)
 
 webapp = Flask(__name__)
 
+# Job queue management
+jobs_queue = []
+completed_jobs = []
+jobs_lock = threading.Lock()
+
+# Background worker thread
+def job_worker():
+    """Background thread that processes jobs sequentially."""
+    while True:
+        job = None
+        with jobs_lock:
+            if jobs_queue:
+                job = jobs_queue[0]
+
+        if job:
+            try:
+                process_queued_job(job)
+            except Exception as e:
+                log.error(f"[WORKER] Unexpected error in job {job.get('id')}: {str(e)}")
+            finally:
+                with jobs_lock:
+                    if jobs_queue and jobs_queue[0] == job:
+                        jobs_queue.pop(0)
+        else:
+            # Sleep briefly if no jobs
+            threading.Event().wait(0.1)
+
+# Start worker thread
+worker_thread = threading.Thread(target=job_worker, daemon=True)
+worker_thread.start()
+log.info("[WORKER] Background job worker started")
 
 app = EpignosticsPortalClient()
 app.login()
 app.get_workflows()  # Load workflows from API
 n_samples = app.get_sample_count()
+
+
+def cleanup_job(job):
+    """Remove a job from completed jobs list."""
+    with jobs_lock:
+        if job in completed_jobs:
+            completed_jobs.remove(job)
+
+
+def process_queued_job(job):
+    """Execute a queued job with error handling."""
+    log.info(f"[EXECUTOR] Starting job {job['id']} ({job['type']})")
+    try:
+        job['status'] = 'processing'
+        log.info(f"[EXECUTOR] Job {job['id']} set to processing")
+
+        if job['type'] == 'refresh':
+            sample_obj = app.get_sample(job['sample_id'])
+            if sample_obj is None:
+                raise Exception(f"Sample {job['sample_id']} not found")
+            sample_obj.get_workflow_runs_new(app)
+            log.info(f"Refreshed sample {job['sample_id']}")
+
+        elif job['type'] == 'cache':
+            sample_obj = app.get_sample(job['sample_id'])
+            if sample_obj is None:
+                raise Exception(f"Sample {job['sample_id']} not found")
+
+            workflow_run_obj = None
+            for run in sample_obj._workflow_runs:
+                if run._id == job['run_id']:
+                    workflow_run_obj = run
+                    break
+
+            if workflow_run_obj is None:
+                raise Exception(f"Workflow run {job['run_id']} not found")
+
+            workflow_obj = classifierWorkflows.get(job['workflow_id'])
+            workflow_run_obj.cache_all(app, sample_name=sample_obj._name, workflow=workflow_obj)
+            log.info(f"Cached workflow run {job['run_id']}")
+
+        job['status'] = 'completed'
+        job['completed_at'] = datetime.utcnow().isoformat() + 'Z'
+        log.info(f"[EXECUTOR] Job {job['id']} completed successfully")
+
+    except requests.Timeout:
+        job['status'] = 'failed'
+        job['error'] = 'Connection timeout - server not responding'
+        log.error(f"Job {job['id']} timeout: {job['error']}")
+    except requests.ConnectionError as e:
+        job['status'] = 'failed'
+        job['error'] = f'Connection failed: {str(e)}'
+        log.error(f"Job {job['id']} connection error: {job['error']}")
+    except Exception as e:
+        job['status'] = 'failed'
+        job['error'] = str(e)
+        log.error(f"Job {job['id']} failed: {job['error']}")
+    finally:
+        with jobs_lock:
+            if job in jobs_queue:
+                jobs_queue.remove(job)
+            if job['status'] == 'completed' or job['status'] == 'failed':
+                completed_jobs.append(job)
+                # Auto-cleanup completed jobs after 5 minutes
+                threading.Timer(300, cleanup_job, args=[job]).start()
 
 
 
@@ -33,6 +133,18 @@ def index():
         samples=app.get_samples(),
         wfs=classifierWorkflows.get_workflows()
         )
+
+
+@webapp.route('/api/queue')
+def get_queue():
+    """Get current job queue status."""
+    with jobs_lock:
+        queue_data = {
+            'pending': [j for j in jobs_queue],
+            'active': [j for j in jobs_queue if j['status'] == 'processing'],
+            'completed': [j for j in completed_jobs[-10:]]  # Last 10 completed
+        }
+    return jsonify(queue_data)
 
 
 def subsample(app, k):
@@ -136,35 +248,31 @@ def restart_workflow_run(sample_id, sample_idat, run_id):
         return "error", 500
 
 
-@webapp.route("/sample/<int:sample_id>:<sample_idat>/refresh")
+@webapp.route("/sample/<int:sample_id>:<sample_idat>/refresh", methods=['GET', 'POST'])
 def refresh(sample_id, sample_idat):
-    """Refresh sample data by fetching latest workflow runs from API."""
-    # Try to get sample from cache first
+    """Queue a refresh job for the sample."""
     sample = app.get_sample(sample_id)
-
-    # If not in cache, fetch it from API
-    if not sample:
-        log.info(f"Sample not in cache, fetching from API...")
-        try:
-            for s in app.update_samples(detailed=False):
-                if s._id == int(sample_id) and s._idat == str(sample_idat):
-                    sample = s
-                    break
-        except Exception as e:
-            log.error(f"Could not fetch sample from API: {str(e)}")
-            return "error - sample not found", 404
 
     if not sample:
         log.error(f"Sample {sample_id}:{sample_idat} not found")
         return "error - sample not found", 404
 
-    log.info(f"Refreshing sample {sample_id}:{sample_idat}")
+    job = {
+        'id': str(uuid.uuid4()),
+        'type': 'refresh',
+        'sample_id': sample_id,
+        'sample_idat': sample_idat,
+        'status': 'queued',
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+    }
 
-    # Refresh workflow runs for this sample
-    sample.get_workflow_runs_new(app)
+    with jobs_lock:
+        jobs_queue.append(job)
+        queue_position = len(jobs_queue)
 
-    log.info(f"Refreshed {len(sample._workflow_runs)} workflow runs for sample {sample_id}")
-    return 'done'
+    log.info(f"Queued refresh for sample {sample_id}, position: {queue_position}")
+
+    return jsonify({'job_id': job['id'], 'status': 'queued', 'position': queue_position})
 
 
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/remove_sample")
@@ -178,13 +286,13 @@ def remove_sample(sample_id, sample_idat):
     return 'done removing and refreshing'
 
 
-@webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/cache")
+@webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/cache", methods=['GET', 'POST'])
 def cache_workflow_result(sample_id, sample_idat, run_id):
-    """Cache all workflow run outputs to ./cache directory on server."""
+    """Queue a cache job for the workflow run."""
     sample = app.get_sample(sample_id)
     if sample is None:
         log.error(f"Could not find sample in cache: {sample_id}:{sample_idat}")
-        return "error - sample not found", 404
+        return jsonify({'error': 'sample not found'}), 404
 
     # Find the workflow run
     workflow_run = None
@@ -196,28 +304,26 @@ def cache_workflow_result(sample_id, sample_idat, run_id):
 
     if not workflow_run:
         log.error(f"Could not find workflow run {run_id} for sample {sample_id}:{sample_idat}")
-        return "error - workflow run not found", 404
+        return jsonify({'error': 'workflow run not found'}), 404
 
-    # Get workflow object
-    try:
-        workflow = classifierWorkflows.get(workflow_run._workflow_id)
-    except Exception as e:
-        log.error(f"Could not find workflow {workflow_run._workflow_id}: {str(e)}")
-        workflow = None
+    job = {
+        'id': str(uuid.uuid4()),
+        'type': 'cache',
+        'sample_id': sample_id,
+        'sample_idat': sample_idat,
+        'run_id': run_id,
+        'workflow_id': workflow_run._workflow_id,
+        'status': 'queued',
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+    }
 
-    # Cache all outputs for all tasks
-    cached_files = workflow_run.cache_all(
-        app,
-        sample_name=sample._name,
-        workflow=workflow
-    )
+    with jobs_lock:
+        jobs_queue.append(job)
+        queue_position = len(jobs_queue)
 
-    if not cached_files:
-        log.error(f"Failed to cache workflow run {run_id} - no files cached")
-        return "error - caching failed", 500
+    log.info(f"Queued cache for workflow run {run_id}, position: {queue_position}")
 
-    log.info(f"Cached {len(cached_files)} files for workflow run {run_id}")
-    return "done"
+    return jsonify({'job_id': job['id'], 'status': 'queued', 'position': queue_position})
 
 
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/download")
