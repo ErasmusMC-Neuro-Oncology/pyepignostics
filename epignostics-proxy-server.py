@@ -101,6 +101,37 @@ def process_queued_job(job):
             workflow_run_obj.cache_all(app, sample_name=sample_obj._name, workflow=workflow_obj)
             log.info(f"Cached workflow run {job['run_id']}")
 
+        elif job['type'] == 'restart':
+            sample_obj = app.get_sample(job['sample_id'])
+            if sample_obj is None:
+                raise Exception(f"Sample {job['sample_id']} not found")
+
+            workflow_run_obj = None
+            for run in sample_obj._workflow_runs:
+                if run._id == job['run_id']:
+                    workflow_run_obj = run
+                    break
+
+            if workflow_run_obj is None:
+                raise Exception(f"Workflow run {job['run_id']} not found")
+
+            success = workflow_run_obj.restart(app)
+            if not success:
+                raise Exception(f"Failed to restart workflow run {job['run_id']}")
+
+            # Refresh sample data after restart
+            sample_obj.get_workflow_runs_new(app)
+            sample_obj._workflows_loading.clear()
+            log.info(f"Restarted workflow run {job['run_id']}")
+
+        elif job['type'] == 'remove':
+            sample_obj = app.get_sample(job['sample_id'])
+            if sample_obj is None:
+                raise Exception(f"Sample {job['sample_id']} not found")
+
+            sample_obj.remove(app)
+            log.info(f"Removed sample {job['sample_id']}")
+
         job['status'] = 'completed'
         job['completed_at'] = datetime.utcnow().isoformat() + 'Z'
         log.info(f"[EXECUTOR] Job {job['id']} completed successfully")
@@ -339,9 +370,9 @@ def execute_job(sample_id, sample_idat, workflow_id):
         return "error", 500
 
 
-@webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/restart")
+@webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/restart", methods=['GET'])
 def restart_workflow_run(sample_id, sample_idat, run_id):
-    """Restart a workflow run."""
+    """Restart a workflow run (legacy direct endpoint)."""
     sample = app.get_sample(sample_id)
     if sample is None:
         log.error(f"Could not find sample in cache: {sample_id}:{sample_idat}")
@@ -368,6 +399,46 @@ def restart_workflow_run(sample_id, sample_idat, run_id):
     else:
         log.error(f"Failed to restart workflow run {run_id}")
         return "error", 500
+
+
+@webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/restart_queue", methods=['POST'])
+def restart_workflow_run_queue(sample_id, sample_idat, run_id):
+    """Queue a restart job for a workflow run."""
+    sample = app.get_sample(sample_id)
+    if sample is None:
+        log.error(f"Could not find sample in cache: {sample_id}:{sample_idat}")
+        return jsonify({'error': 'sample not found'}), 404
+
+    # Find the workflow run to get workflow_id
+    workflow_run = None
+    if sample._workflow_runs:
+        for run in sample._workflow_runs:
+            if run._id == run_id:
+                workflow_run = run
+                break
+
+    if not workflow_run:
+        log.error(f"Could not find workflow run {run_id} for sample {sample_id}:{sample_idat}")
+        return jsonify({'error': 'workflow run not found'}), 404
+
+    job = {
+        'id': str(uuid.uuid4()),
+        'type': 'restart',
+        'sample_id': sample_id,
+        'sample_idat': sample_idat,
+        'run_id': run_id,
+        'workflow_id': workflow_run._workflow_id,
+        'status': 'queued',
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+    }
+
+    with jobs_lock:
+        jobs_queue.append(job)
+        queue_position = len(jobs_queue)
+
+    log.info(f"Queued restart for workflow run {run_id}, position: {queue_position}")
+
+    return jsonify({'job_id': job['id'], 'status': 'queued', 'position': queue_position})
 
 
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/refresh", methods=['GET', 'POST'])
@@ -399,6 +470,7 @@ def refresh(sample_id, sample_idat):
 
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/remove_sample")
 def remove_sample(sample_id, sample_idat):
+    """Remove a sample (legacy direct endpoint)."""
     sample = app.get_sample(sample_id)
     if sample is None:
         log.error(f"Could not find sample in cache: {sample_id}:{sample_idat}")
@@ -406,6 +478,32 @@ def remove_sample(sample_id, sample_idat):
 
     sample.remove(app)
     return 'done removing and refreshing'
+
+
+@webapp.route("/sample/<int:sample_id>:<sample_idat>/remove_sample_queue", methods=['POST'])
+def remove_sample_queue(sample_id, sample_idat):
+    """Queue a remove job for a sample."""
+    sample = app.get_sample(sample_id)
+    if sample is None:
+        log.error(f"Could not find sample in cache: {sample_id}:{sample_idat}")
+        return jsonify({'error': 'sample not found'}), 404
+
+    job = {
+        'id': str(uuid.uuid4()),
+        'type': 'remove',
+        'sample_id': sample_id,
+        'sample_idat': sample_idat,
+        'status': 'queued',
+        'created_at': datetime.utcnow().isoformat() + 'Z',
+    }
+
+    with jobs_lock:
+        jobs_queue.append(job)
+        queue_position = len(jobs_queue)
+
+    log.info(f"Queued remove for sample {sample_id}, position: {queue_position}")
+
+    return jsonify({'job_id': job['id'], 'status': 'queued', 'position': queue_position})
 
 
 @webapp.route("/sample/<int:sample_id>:<sample_idat>/workflow_run/<int:run_id>/cache", methods=['GET', 'POST'])

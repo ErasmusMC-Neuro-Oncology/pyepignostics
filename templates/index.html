@@ -10,7 +10,7 @@
                     <button class="toggle-btn" data-view="result">Result</button>
                 </div>
                 <!-- Job Queue Display -->
-                <div id="jobQueueList" style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                <div id="jobQueueList" style="display: flex; gap: 1px; align-items: center; flex: 1; overflow-x: auto; padding: 4px 0;">
                     <div style="color: #9ca3af; font-size: 12px;">No jobs</div>
                 </div>
             </div>
@@ -161,37 +161,26 @@
 
             if(conf == "yes") {
                 $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
-                $.ajax({
-                    url: '/sample/'+sample_id+':'+sample_idat+'/remove_sample',
-                    type: 'GET',
-                    complete: function(xhr) {
-                        // 404 or 200 are both success (API returns 404 on successful delete)
-                        if (xhr.status === 404 || xhr.status === 200) {
-                            const row = document.querySelector(`#sample_rm_${sample_id}`).closest('TR');
-                            row.style.opacity = '0.5';
-                            row.style.pointerEvents = 'none';
-                            const sampleCell = row.querySelector('TD:first-child');
-                            if (sampleCell) {
-                                sampleCell.style.color = '#9ca3af';
-                            }
-                            $(selector).html('<i class="fas fa-trash"></i>');
-                        } else {
-                            // Only show alert for real errors (not 404)
-                            $(selector).html('<i class="fas fa-trash"></i>');
-                            alert('Failed to remove sample');
-                        }
-                    }
+                $(selector).addClass('disabled').css('pointer-events', 'none');
+                $.post('/sample/'+sample_id+':'+sample_idat+'/remove_sample_queue', function(response) {
+                    $(selector).html('<i class="fas fa-trash"></i>');
+                    updateJobQueue();  // Poll immediately to show job
+                }).fail(function() {
+                    $(selector).html('<i class="fas fa-trash"></i>');
+                    $(selector).removeClass('disabled').css('pointer-events', 'auto');
                 });
             }
         }
 
         function cache_workflow_result(selector, sample_id, sample_idat, run_id) {
             $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
+            $(selector).addClass('disabled').css('pointer-events', 'none');
             $.post('/sample/'+sample_id+':'+sample_idat+'/workflow_run/'+run_id+'/cache', function(response) {
                 $(selector).html('<i class="fas fa-save"></i>');
                 updateJobQueue();  // Poll immediately to show job
             }).fail(function() {
                 $(selector).html('<i class="fas fa-save"></i>');
+                $(selector).removeClass('disabled').css('pointer-events', 'auto');
             });
         }
 
@@ -201,25 +190,26 @@
 
         function execute_workflow(selector, sample_id, sample_idat, workflow_id) {
             $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
+            $(selector).addClass('disabled').css('pointer-events', 'none');
             $.get('/sample/'+sample_id+':'+sample_idat+'/workflow/'+workflow_id+'/execute_job', function() {
                 setTimeout(function() {
                     location.reload();
                 }, 2000);
             }).fail(function() {
                 $(selector).html('<i class="fas fa-play"></i>');
-                alert('Failed to execute workflow');
+                $(selector).removeClass('disabled').css('pointer-events', 'auto');
             });
         }
 
         function restart_workflow_run(selector, sample_id, sample_idat, run_id) {
             $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
-            $.get('/sample/'+sample_id+':'+sample_idat+'/workflow_run/'+run_id+'/restart', function() {
-                setTimeout(function() {
-                    location.reload();
-                }, 2000);
+            $(selector).addClass('disabled').css('pointer-events', 'none');
+            $.post('/sample/'+sample_id+':'+sample_idat+'/workflow_run/'+run_id+'/restart_queue', function(response) {
+                $(selector).html('<i class="fas fa-redo"></i>');
+                updateJobQueue();  // Poll immediately to show job
             }).fail(function() {
                 $(selector).html('<i class="fas fa-redo"></i>');
-                alert('Failed to restart workflow');
+                $(selector).removeClass('disabled').css('pointer-events', 'auto');
             });
         }
 
@@ -273,6 +263,10 @@
                         baseColor = '#8b5cf6';  // purple for refresh
                     } else if (job.type === 'cache') {
                         baseColor = '#ec4899';  // pink for cache
+                    } else if (job.type === 'restart') {
+                        baseColor = '#b45309';  // brown for restart
+                    } else if (job.type === 'remove') {
+                        baseColor = '#dc2626';  // red for remove
                     }
 
                     const color = job.status === 'processing' ? baseColor : baseColor + '80';  // 50% opacity when queued
@@ -312,11 +306,13 @@
 
         function refresh_sample(selector, sample_id, sample_idat) {
             $(selector).html('<i class="fas fa-spinner fa-spin"></i>');
+            $(selector).addClass('disabled').css('pointer-events', 'none');
             $.post('/sample/'+sample_id+':'+sample_idat+'/refresh', function(response) {
                 $(selector).html('<i class="fas fa-sync-alt"></i>');
                 updateJobQueue();  // Poll immediately to show job
             }).fail(function() {
                 $(selector).html('<i class="fas fa-sync-alt"></i>');
+                $(selector).removeClass('disabled').css('pointer-events', 'auto');
             });
         }
     </script>
@@ -346,7 +342,7 @@
             <TD><span title="Full UUID: {{ sample._idat }} | Sample ID: {{ sample._id }}" style="cursor: copy; user-select: text;"><NOBR>{{ sample._idat[:8] }}...</NOBR></span></TD>
             <TD><span title="{{ sample._chip_type }}"><NOBR>{{ sample._chip_type.replace('CHIP_', '') }}</NOBR></span></TD>
             <TD><span class="action-badge danger" title="remove sample" ID="sample_rm_{{ sample._id }}" style="cursor: pointer;" ONCLICK="prompt_remove_sample($('#sample_rm_{{ sample._id }}'), '{{ sample._id }}', '{{ sample._idat }}');"><i class="fas fa-trash"></i></span></TD>
-            <TD><span class="action-badge"><A style="cursor: pointer; color: inherit; text-decoration: none;" TITLE="refresh data in back-end" ID="refresh_{{ sample._id}}" ONCLICK="refresh_sample($('#refresh_{{ sample._id}}'), '{{ sample._id }}', '{{ sample._idat }}');"><i class="fas fa-sync-alt"></i></A></span></TD>
+            <TD><span class="action-badge" TITLE="refresh data in back-end" ID="refresh_{{ sample._id}}" style="cursor: pointer;" ONCLICK="refresh_sample($('#refresh_{{ sample._id}}'), '{{ sample._id }}', '{{ sample._idat }}');"><i class="fas fa-sync-alt"></i></span></TD>
 
             {% for wf in wfs %}
                 {% if sample._workflows[wf]['status'] == "available" %}

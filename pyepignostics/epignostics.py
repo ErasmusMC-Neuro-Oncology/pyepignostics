@@ -217,12 +217,16 @@ class workflow_run:
 
         # Check if directory exists and contains files
         if not os.path.isdir(run_dir):
+            log.debug(f"[is_cached] Directory not found: {run_dir}")
             return False
 
         # Check if directory has any cached files
         try:
-            return len(os.listdir(run_dir)) > 0
-        except OSError:
+            has_files = len(os.listdir(run_dir)) > 0
+            log.debug(f"[is_cached] {run_dir} - cached: {has_files}")
+            return has_files
+        except OSError as e:
+            log.debug(f"[is_cached] Error checking {run_dir}: {str(e)}")
             return False
 
     def is_downloaded(self):
