@@ -50,14 +50,13 @@ class workflow_run:
             app: EpignosticsPortalClient instance with authentication token
         """
         try:
-            response = requests.get(
+            response = app.get(
                 f"{app._SERVER_URL}/workflow_runs/{self._id}",
-                headers={"Authorization": f"Bearer {app._response_token}"},
                 verify=True,
             )
-            response.raise_for_status()
             data = response.json()
             self._task_runs = data.get('task_runs', [])
+            self._task_runs.sort(key=lambda t: t.get('task', {}).get('task_name', ''))
             log.info(f"Retrieved {len(self._task_runs)} tasks for workflow run {self._id}")
         except requests.exceptions.RequestException as e:
             log.error(f"Could not get detailed info for workflow run {self._id}: {str(e)}")
@@ -296,13 +295,11 @@ class workflow_run:
         """
         try:
             url = f"{app._SERVER_URL}/workflow_runs/restart/{self._id}"
-            response = requests.post(
+            response = app.post(
                 url,
-                headers={"Authorization": f"Bearer {app._response_token}"},
                 verify=True,
                 timeout=30,
             )
-            response.raise_for_status()
             log.info(f"Restarted workflow run {self._id}")
             return True
         except requests.exceptions.RequestException as e:
@@ -341,13 +338,11 @@ class workflow_run:
         url = f"{app._SERVER_URL}/{endpoint}/{self._id}/{task_result_id}"
 
         try:
-            response = requests.get(
+            response = app.get(
                 url,
-                headers={"Authorization": f"Bearer {app._response_token}"},
                 verify=True,
                 timeout=30,
             )
-            response.raise_for_status()
 
             file_name = self.get_file_name(download_info, sample_name=sample_name)
 
@@ -447,13 +442,11 @@ class workflow_run:
                     # Construct full endpoint path: analysis_idat/{endpoint_name}
                     full_endpoint = f"analysis_idat/{endpoint}"
                     url = f"{app._SERVER_URL}/{full_endpoint}/{self._id}/{task_result_id}"
-                    response = requests.get(
+                    response = app.get(
                         url,
-                        headers={"Authorization": f"Bearer {app._response_token}"},
-                verify=True,
+                        verify=True,
                         timeout=30,
                     )
-                    response.raise_for_status()
 
                     # Generate filename with task name and endpoint type
                     file_name = f"{task_name}_{endpoint}.{file_ext}"
